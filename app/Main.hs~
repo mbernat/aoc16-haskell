@@ -1,0 +1,10 @@
+module Main where
+
+import Day1 as D1
+
+main1 :: IO ()
+main1 = do
+    l <- getLine
+    print $ D1.solve l
+
+main = main1
