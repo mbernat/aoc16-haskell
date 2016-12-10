@@ -1,9 +1,0 @@
-module Day1 where
-
-data Move = Left Int | Right Int
-
-parse :: String -> Move
-parse ('R':s) = Right (read s)
-parse ('L':s) = Left (read s)
-
-items :: String -> [String]
