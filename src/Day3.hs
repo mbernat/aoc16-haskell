@@ -2,7 +2,7 @@ module Day3 where
 
 import Data.List
 import Data.List.Split
-import System.IO
+
 
 input :: IO String
 input = readFile "day3"

@@ -3,6 +3,9 @@ module Day1 where
 import Data.List
 import Data.List.Split
 
+import Lib
+
+
 data Turn = L | R
 data Move = Move Turn Int
 
@@ -69,8 +72,6 @@ visited = map pos . concat . scanl (visit . last) [initialState]
 
 repeated :: [Location] -> [Location]
 repeated = map fst . filter (\(x, c) -> c > 1) . freq
-  where
-    freq = map (\x -> (head x, length x)) . group . sort
 
 solve2 inp = find (`elem` multiple) locs
   where
