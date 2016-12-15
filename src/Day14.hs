@@ -60,7 +60,12 @@ solve input = filter (isKey input cache) [0..q] !! 63
     q = 30000
     cache = populateCache input (q + 1000)
 
-solve2 hashes input = filter (isKey2 cache) (zip [0..] hashes) !! 63
+hashes :: IO [String]
+hashes = lines <$> readFile "hashes"
+
+solve2 :: [String] -> Int
+solve2 hashes = fst . (!! 63) $ filter (isKey2 cache) zipped
   where
+    zipped = zip [0..] hashes
     cache = populateCache2 hashes
 
