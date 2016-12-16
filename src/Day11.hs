@@ -49,7 +49,7 @@ move State{..} to what = State{el = to, obj = obj''}
 
 moves :: Ord a => State a -> [State a]
 moves s@State{..} =
-    [move s e what | e <- Map.keys obj, e /= el, what <- toMove el]
+    [move s e what | e <- [el + 1, el - 1], e >= 0, e < 4, what <- toMove el]
   where
     toMove level = subsets $ fromJust $ Map.lookup level obj
 
