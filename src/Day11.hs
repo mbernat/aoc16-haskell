@@ -1,10 +1,13 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 module Day11 where
 
-import Data.Dequeue
+import Control.Monad
+import qualified Data.PQueue.Min as PQueue
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Maybe
+import Data.Ord
 import qualified Data.Set as Set
 
 data Item = Ge | Mi
@@ -13,7 +16,7 @@ data Item = Ge | Mi
 data TutMaterial = H | L
   deriving (Eq, Ord, Show)
 
-data FirstMaterial = R | P
+data FirstMaterial = Pr | Co | Cu | Ru | Pu
   deriving (Eq, Ord, Show)
 
 type Object a = (a, Item)
@@ -22,15 +25,42 @@ type Objects a = Map.Map Int (Set.Set (Object a))
 
 data State a = State
     { el :: Int
+    , steps :: Int
     , obj :: Objects a
     }
-  deriving (Eq, Ord, Show)
+  deriving (Show)
+
+instance Eq a => Eq (State a) where
+    s1 == s2 = (el s1, obj s1) == (el s2, obj s2)
+
+instance Ord a => Ord (State a) where
+    compare s1 s2 = compare (el s1, obj s1) (el s2, obj s2)
+
+newtype DistState a = DistState { fromDS :: (State a) }
+  deriving (Eq, Show)
+
+-- this assumes that the final state is everything on the third floor
+distance :: State a -> Int
+distance State{..} = (objDist `div` 2) + steps
+  where
+    objDist = sum $ Map.mapWithKey (\k v -> (3 - k) * Set.size v) obj
+
+instance Ord a => Ord (DistState a) where
+    compare = comparing $ distance . fromDS
 
 initial0 :: State TutMaterial
-initial0 = State 0 $ Map.fromList
+initial0 = State 0 0 $ Map.fromList
     [ (0, Set.fromList [(H, Mi), (L, Mi)])
     , (1, Set.fromList [(H, Ge)])
     , (2, Set.fromList [(L, Ge)])
+    , (3, Set.empty)
+    ]
+
+initial1 :: State FirstMaterial
+initial1 = State 0 0 $ Map.fromList
+    [ (0, Set.fromList [(Pr, Ge), (Pr, Mi)])
+    , (1, Set.fromList [(Co, Ge), (Cu, Ge), (Ru, Ge), (Pu, Ge)])
+    , (2, Set.fromList [(Co, Mi), (Cu, Mi), (Ru, Mi), (Pu, Mi)])
     , (3, Set.empty)
     ]
 
@@ -39,57 +69,66 @@ subsets s = List.nub $ map Set.fromList $ [[e1, e2] | e1 <- e, e2 <- e]
   where
     e = Set.elems s
 
-lookup k = fromJust . Map.lookup k
-
-move :: Ord a => State a -> Int -> Set.Set (Object a) -> State a
-move State{..} to what = State{el = to, obj = obj''}
-  where
-    obj' = Map.adjust (`Set.difference` what) el obj
-    obj'' = Map.adjust (`Set.union` what) to obj'
+see k = fromJust . Map.lookup k
 
 moves :: Ord a => State a -> [State a]
-moves s@State{..} =
-    [move s e what | e <- [el + 1, el - 1], e >= 0, e < 4, what <- toMove el]
-  where
-    toMove level = subsets $ fromJust $ Map.lookup level obj
+moves s@State{..} = do
+    let stuffAtEl = see el obj
+    toMove <- subsets stuffAtEl
+    let lessStuffAtEl = Set.difference stuffAtEl toMove
+    guard $ valid lessStuffAtEl
+    let obj' = Map.insert el lessStuffAtEl obj
+    to <- [t | t <- [el + 1, el - 1], t >= 0, t < 4]
+    let moreStuffAtTo = Set.union toMove $ see to obj
+    guard $ valid moreStuffAtTo
+    let obj'' = Map.insert to moreStuffAtTo obj'
+    pure $ State{el = to, obj = obj'', steps = steps + 1}
 
-valid :: Ord a => State a -> Bool
-valid = List.all (shielded . Set.toList) . Map.elems . obj
+valid :: Ord a => Set.Set (Object a) -> Bool
+valid = shielded . Set.toList
   where
     shielded items =
-        (Set.null $ Set.difference (gens items) (chips items)) ||
+        (Set.null $ (gens items)) ||
         (Set.null $ Set.difference (chips items) (gens items))
     chips = Set.fromList . List.map fst . List.filter ((== Mi) . snd)
     gens = Set.fromList . List.map fst . List.filter ((== Ge) . snd)
 
-neighbours = filter valid . moves
-
 data Tr a = Tr
-    { visited :: Set.Set (State a, Int)
-    , next :: BankersDequeue (State a, Int)
+    { visited :: Set.Set (State a)
+    , next :: PQueue.MinQueue (DistState a)
     }
   deriving (Show)
 
-initialTr0 = Tr Set.empty (pushBack empty (initial0, 0))
+mkInitialTr :: Ord a => State a -> Tr a
+mkInitialTr s = Tr Set.empty (PQueue.insert (DistState s) PQueue.empty)
 
-destObj0 = Map.fromList
+allObjects :: Ord a => State a -> Set.Set (Object a)
+allObjects s = foldl Set.union Set.empty (Map.elems $ obj s)
+
+mkDest :: Ord a => State a -> State a
+mkDest s = State 3 0 $ Map.fromList
     [ (0, Set.empty)
     , (1, Set.empty)
     , (2, Set.empty)
-    , (3, Set.fromList [(H, Ge), (H, Mi), (L, Ge), (L, Mi)])
+    , (3, allObjects s)
     ]
 
-walk :: Ord a => (State a -> [State a]) -> State a -> Tr a -> Maybe (Tr a, Tr a)
+walk :: Ord a =>
+    (State a -> [State a]) -> State a -> Tr a -> Maybe (Tr a, Tr a)
 walk neigh dest s@Tr{..} = nextTr
   where
-    ((current, dist), rest) = fromJust $ popFront next
-    visited' = Set.insert (current, dist) visited
-    unvisNeigh = map (\p -> (p, dist + 1)) .
-      filter (\p -> not $ p `elem` (Set.map fst visited)) $ neigh current
-    next' = foldl pushBack rest unvisNeigh
-    nextTr = if current == dest then Nothing else Just $ (s, Tr visited' next')
+    (currentDS, rest) = PQueue.deleteFindMin next
+    current = fromDS currentDS
+    visited' = Set.insert current visited
+    unvisNeigh = filter (\p -> not $ p `elem` visited) $ neigh current
+    next' = foldl (\q n -> PQueue.insert (DistState n) q) rest unvisNeigh
+    nextTr = if current == dest then Nothing
+             else Just $ (Tr visited' next', Tr visited' next')
 
-solve = List.unfoldr (walk neighbours (State 3 destObj0)) initialTr0
+solve0 = List.unfoldr (walk moves (mkDest initial0)) (mkInitialTr initial0)
 
-active :: Tr a -> (State a, Int)
-active = fst . fromJust . popFront . next
+solve1 = List.unfoldr (walk moves (mkDest initial1)) (mkInitialTr initial1)
+
+active :: Tr a -> State a
+active = fromDS . PQueue.findMin . next
+
