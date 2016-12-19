@@ -33,6 +33,7 @@ library
                        Day15
                        Day16
                        Day18
+                       Day19
   build-depends:       base >= 4.7 && < 5
                      , MissingH
                      , bytestring
