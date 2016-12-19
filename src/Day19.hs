@@ -23,6 +23,15 @@ step2Slow xs = take (l - 1) $ drop 1 $ cycle $ a ++ tail b
     (a, b) = splitAt (l `div` 2) xs
     c = tail b
 
+powerOfThree :: Int -> Int
+powerOfThree n = last $ [3^q | q <- [0..20], 3^q < n]
+
+solve2Fast :: Int -> Int
+solve2Fast n = if diff <= pot then diff else n * 2 - 3 * pot
+  where
+    pot = powerOfThree n
+    diff = n - pot
+
 {-
  map (solve step2Slow) [1..100]
 [1

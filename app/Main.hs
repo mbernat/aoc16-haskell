@@ -6,6 +6,7 @@ import Day5 as D5
 import Day11 as D11
 import Day14 as D14
 import Day16 as D16
+import Day19
 
 main1 :: IO ()
 main1 = do
@@ -28,4 +29,4 @@ main14 =
 
 main16 = print $ D16.solve D16.len2
 
-main = main16
+main = print $ Day19.solve2Fast Day19.input
