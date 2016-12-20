@@ -3,11 +3,12 @@ module Day20 where
 import Control.Monad
 import Data.List
 import Data.List.Split
+import Data.Maybe
 import Data.Ord
 
-type Pair = (Int, Int)
+type Pair = (Integer, Integer)
 
-try :: [Pair] -> Int -> Maybe Int
+try :: [Pair] -> Integer -> Maybe Integer
 try rules target = do
     prec <- nonEmpty $ filter ((<= target) . fst) rules
     let max = snd $ maximumBy (comparing snd) prec
@@ -28,9 +29,30 @@ load = map parse . lines
 
 input = readFile "day20"
 
-solve :: [Pair] -> Int
-solve input = last . unfoldr step $ (sortBy (comparing fst) input, 0)
+nextFree :: Integer -> [Pair] -> ([Pair], Integer)
+nextFree begin input = last . unfoldr step $ (sortBy (comparing fst) input, begin)
   where
     step (l, t) = case try l t of
       Nothing -> Nothing
-      Just t' -> Just (t', (filter ((>t) . fst) l, t'))
+      Just t' -> Just ((l', t'), (l', t'))
+        where l' = filter ((>t) . fst) l
+
+nextBlock :: [Pair] -> Integer -> Integer
+nextBlock input t = fst . minimumBy (comparing fst) $ filter ((>t) . fst) input
+
+-- gaps are in the form [x, y), x, inclusive, y exclusive
+nextGap :: (Pair, [Pair]) -> Maybe (Pair, (Pair, [Pair]))
+nextGap (_, []) = Nothing
+nextGap ((_, prev), rules) = case rest of
+    [] -> Nothing
+    _ -> Just ((x,y), ((x,y), rest))
+  where
+    (rest, x) = nextFree prev rules
+    y = nextBlock rest x
+
+solve1 = snd . nextFree 0
+
+solve2 :: [Pair] -> Integer
+solve2 input = sum . map (\(x, y) -> y - x) $ unfoldr nextGap ((0,0), input)
+
+play input = unfoldr nextGap ((0,0), input)
